@@ -3,13 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChatBot Multi-Utilisateur</title>
+    <title>ChatBot Simple</title>
     <style>
-        /* Ajoutez les styles améliorés ici comme dans le précédent */
+        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f4f4f4; }
+        .chat-container { width: 300px; background: white; padding: 10px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); position: relative; }
+        .chat-box { height: 300px; overflow-y: auto; border-bottom: 1px solid #ddd; padding: 5px; display: none; }
+        .message { padding: 8px; margin: 5px 0; border-radius: 10px; position: relative; max-width: 80%; display: inline-block; }
+        .user { background: #BFAFF5; color: black; text-align: right; align-self: flex-end; float: right; clear: both; }
+        .bot { background: #F2F2F0; text-align: left; align-self: flex-start; float: left; clear: both; }
+        .input-container { display: flex; margin-top: 10px; gap: 10px; display: none; }
+        input { flex: 1; padding: 8px; border: 1px solid #aaa; border-radius: 5px; }
+        button { padding: 8px; background: #6038E8; color: white; border: none; cursor: pointer; border-radius: 5px; }
+        .form-container { text-align: center; }
+        .timestamp { font-size: 10px; color: gray; display: block; text-align: center; margin-top: 3px; }
+        .header-time { text-align: center; font-weight: bold; margin-bottom: 10px; display: none; }
     </style>
 </head>
 <body>
     <div class="chat-container">
+        <div class="header-time" id="current-time"></div>
         <div class="form-container" id="form-container">
             <h3>Entrez vos informations</h3>
             <input type="text" id="name" placeholder="Nom" oninput="this.value = this.value.replace(/\d/g, '')"><br><br>
@@ -19,42 +31,43 @@
         </div>
         <div class="chat-box" id="chat-box">
             <div class="message bot">Comment puis-je vous aider ?</div>
+            <span class="timestamp">Maintenant</span>
         </div>
-        <div class="input-container" id="input-container" style="display: none;">
+        <div class="input-container" id="input-container">
             <input type="text" id="user-input" placeholder="Votre message..." onkeypress="handleKeyPress(event)">
             <button onclick="sendMessage()">Envoyer</button>
         </div>
     </div>
 
     <script>
-        // Vérification de l'ID utilisateur dans localStorage
-        let userID = localStorage.getItem('userID');
-        if (!userID) {
-            userID = generateUniqueID();
-            localStorage.setItem('userID', userID);
+        function updateTime() {
+            let now = new Date();
+            let hours = now.getHours().toString().padStart(2, '0');
+            let minutes = now.getMinutes().toString().padStart(2, '0');
+            document.getElementById("current-time").innerText = `${hours}:${minutes}`;
         }
+        setInterval(updateTime, 60000);
+        updateTime();
 
-        // Initialisation du stockage des messages spécifiques à l'utilisateur
-        if (!localStorage.getItem("chatMessages_" + userID)) {
-            localStorage.setItem("chatMessages_" + userID, JSON.stringify([]));
-        }
-
-        function loadMessages() {
-            let messages = JSON.parse(localStorage.getItem("chatMessages_" + userID));
-            const chatBox = document.getElementById("chat-box");
-            chatBox.innerHTML = '';  // Réinitialiser la boîte de chat
-            messages.forEach(message => {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `message ${message.role}`;
-                messageDiv.innerHTML = message.content;
-                chatBox.appendChild(messageDiv);
-            });
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-
-        // Générer un ID unique pour l'utilisateur
-        function generateUniqueID() {
-            return 'user_' + Math.random().toString(36).substr(2, 9);
+        async function fetchAIResponse(message) {
+            try {
+                const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer VOTRE_CLE_API" // Remplace ici avec ta clé API OpenAI
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-4",
+                        messages: [{role: "user", content: message}]
+                    })
+                });
+                const data = await response.json();
+                return data.choices ? data.choices[0].message.content : "Je n'ai pas compris votre question.";
+            } catch (error) {
+                console.error("Erreur lors de la requête API:", error);
+                return "Une erreur s'est produite. Veuillez réessayer plus tard.";
+            }
         }
 
         function validateForm() {
@@ -73,8 +86,9 @@
             }
             
             document.getElementById("form-container").style.display = "none";
+            document.getElementById("chat-box").style.display = "block";
             document.getElementById("input-container").style.display = "flex";
-            loadMessages();  // Charger les messages stockés
+            document.getElementById("current-time").style.display = "block";
         }
 
         async function sendMessage() {
@@ -89,52 +103,18 @@
             let timestamp = `${hours}:${minutes}`;
 
             // Afficher le message de l'utilisateur
-            chatBox.innerHTML += `<div class='message user'>${message}</div><span class='timestamp'>${timestamp}</span>`;
-
-            // Stocker le message
-            storeMessage('user', message);
-
+            chatBox.innerHTML += `<div class='message user'>${message}</div><span class='timestamp'>Maintenant</span>`;
             input.value = "";
 
+            // Appel à l'API IA pour obtenir la réponse
             let botResponse = await fetchAIResponse(message);
             chatBox.innerHTML += `<div class='message bot'>${botResponse}</div><span class='timestamp'>${timestamp}</span>`;
-
-            // Stocker la réponse du bot
-            storeMessage('bot', botResponse);
-
             chatBox.scrollTop = chatBox.scrollHeight;
-        }
-
-        function storeMessage(role, content) {
-            let messages = JSON.parse(localStorage.getItem("chatMessages_" + userID));
-            messages.push({ role: role, content: content });
-            localStorage.setItem("chatMessages_" + userID, JSON.stringify(messages));
         }
 
         function handleKeyPress(event) {
             if (event.key === "Enter") {
                 sendMessage();
-            }
-        }
-
-        async function fetchAIResponse(message) {
-            try {
-                const response = await fetch("https://api.openai.com/v1/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": "Bearer VOTRE_CLE_API"
-                    },
-                    body: JSON.stringify({
-                        model: "gpt-4",
-                        messages: [{role: "user", content: message}]
-                    })
-                });
-                const data = await response.json();
-                return data.choices ? data.choices[0].message.content : "Je n'ai pas compris votre question.";
-            } catch (error) {
-                console.error("Erreur lors de la requête API:", error);
-                return "Une erreur s'est produite. Veuillez réessayer plus tard.";
             }
         }
     </script>
